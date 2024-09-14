@@ -198,26 +198,30 @@ class CustomAuthToken(ObtainAuthToken):
         """An override of the post method that takes a login request, verifies
         the login credentials and creates an expiring token once the user is verified"""
         
-        serializer = self.serializer_class(data=request.data,
-                                       context={'request': request})
+        # Validate the login request
+        serializer = self.serializer_class(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data['user']
+        
+        # Create or retrieve the authentication token
         token, created = Token.objects.get_or_create(user=user)
         if not created:
-            # update the created time of the token to keep it valid
+            # Update the token's creation time to keep it valid
             token.created = datetime.utcnow()
             token.save()
 
+        # Check if the user is a Seller or Buyer and assign account_id and session_status
         if Seller.objects.filter(profile=user).exists():
             account_id = Seller.objects.get(profile=user).id
             session_status = 'seller'
         elif Buyer.objects.filter(profile=user).exists():
-            account_id = Seller.objects.get(profile=user).id
+            account_id = Buyer.objects.get(profile=user).id  # Fix this to retrieve Buyer's ID
             session_status = 'buyer'
         else:
             account_id = None
             session_status = None
 
+        # Return the token and user details
         return Response({
             'token': token.key,
             'user_id': user.pk,
