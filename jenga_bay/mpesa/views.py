@@ -24,7 +24,7 @@ def index(request):
             cl = MpesaClient()
             account_reference = 'reference'
             transaction_desc = 'Payment Description'
-            callback_url = 'https://02e6-41-80-115-21.ngrok-free.app/mpesa/daraja/stk-push'  # Update with your backend callback URL
+            callback_url = 'https://precious-adversely-prawn.ngrok-free.app/mpesa/daraja/stk-push'  # Update with your backend callback URL
 
             # Call the STK push method
             response = cl.stk_push(phone_number, amount, account_reference, transaction_desc, callback_url)

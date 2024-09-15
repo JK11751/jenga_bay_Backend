@@ -9,6 +9,121 @@ from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
 from rest_framework.response import Response
 
+
+import requests
+from django.conf import settings
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from .models import Transaction, Seller
+from rest_framework.permissions import IsAuthenticated
+from django.utils import timezone
+import base64
+from datetime import datetime
+
+class MpesaPaymentView(APIView):
+    """Handle M-Pesa STK Push"""
+    permission_classes = [IsAuthenticated]  # Ensure the user is authenticated
+
+    def post(self, request):
+        phone_number = request.data.get('phone_number')
+        amount = request.data.get('amount')
+        seller_id = request.data.get('seller_id')
+
+        print(phone_number, amount, seller_id)
+
+        if not seller_id:
+            return Response({"error": "Seller ID is required"}, status=400)
+
+        try:
+            # Retrieve the seller's phone number from the database
+            seller = Seller.objects.get(id=seller_id)
+            seller_phone_number = seller.phone_number
+            print(seller_phone_number)
+        except Seller.DoesNotExist:
+            return Response({"error": "Seller not found"}, status=404)
+        
+
+        # Safaricom API credentials and URLs
+        consumer_key = settings.MPESA_CONSUMER_KEY
+        consumer_secret = settings.MPESA_CONSUMER_SECRET
+        business_short_code = settings.MPESA_SHORTCODE
+        lipa_na_mpesa_online_url = "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest"
+        callback_url = "https://precious-adversely-prawn.ngrok-free.app/mpesa/callback/"  # Replace with your callback URL
+
+        # Step 1: Get access token
+        auth_url = "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials"
+        response = requests.get(auth_url, auth=(consumer_key, consumer_secret))
+        access_token = response.json().get('access_token')
+
+        # Step 2: Generate password for M-Pesa STK push
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        password = base64.b64encode(f"{business_short_code}{settings.MPESA_PASSKEY}{timestamp}".encode()).decode()
+
+        # Step 3: Generate STK push payload
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+
+        stk_push_payload = {
+            "BusinessShortCode": business_short_code,
+            "Password": password,
+            "Timestamp": timestamp,
+            "TransactionType": "CustomerPayBillOnline",
+            "Amount": amount,
+            "PartyA": phone_number,  # Phone number initiating the payment
+            "PartyB": business_short_code,
+            "PhoneNumber": seller_phone_number,  # Seller's phone number
+            "CallBackURL": callback_url,
+            "AccountReference": "JengaBay",
+            "TransactionDesc": "Payment for order"
+        }
+
+        # Step 4: Make STK push request
+        mpesa_response = requests.post(lipa_na_mpesa_online_url, json=stk_push_payload, headers=headers)
+        print(mpesa_response.json())
+        # Step 5: Handle response from Safaricom
+        mpesa_response_data = mpesa_response.json()
+        if mpesa_response_data.get('ResponseCode') == "0":
+            # Payment initiated successfully, create a transaction record
+            transaction = Transaction.objects.create(
+                transaction_mode="m-pesa",
+                amount=amount,
+                payer=request.user.buyer,  # assuming the logged-in user is the buyer
+                recipient=Seller.objects.get(id=seller_id),
+                phone_number=phone_number,
+                merchant_request_id=mpesa_response_data.get('MerchantRequestID'),
+                checkout_request_id=mpesa_response_data.get('CheckoutRequestID'),
+                payment_status="Pending"
+            )
+            return Response({"message": "STK push initiated", "transaction_id": transaction.id})
+        else:
+            return Response({"error": "Failed to initiate payment"}, status=400)
+
+
+class MpesaCallbackView(APIView):
+    """Handle M-Pesa payment callback from Safaricom"""
+
+    def post(self, request):
+        # Process callback data
+        callback_data = request.data.get('Body').get('stkCallback')
+
+        merchant_request_id = callback_data.get('MerchantRequestID')
+        result_code = callback_data.get('ResultCode')
+        transaction_code = None
+
+        if result_code == 0:
+            # Payment successful
+            transaction_code = callback_data.get('CallbackMetadata').get('Item')[1].get('Value')
+            Transaction.objects.filter(merchant_request_id=merchant_request_id).update(
+                payment_status="Completed", transaction_code=transaction_code, completed_at=timezone.now()
+            )
+        else:
+            # Payment failed
+            Transaction.objects.filter(merchant_request_id=merchant_request_id).update(payment_status="Failed")
+
+        return Response({"message": "Callback received"}, status=200)
+
 class SellerCreateView(CreateAPIView):
     """api for creating new sellers"""
 

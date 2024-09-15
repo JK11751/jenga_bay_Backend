@@ -114,9 +114,13 @@ class Transaction(models.Model):
 
     transaction_mode = models.CharField(max_length=100, choices=t_mode, null=False)
     amount = models.FloatField(null=False)
-    transaction_code = models.CharField(max_length=200, null=False)
+    transaction_code = models.CharField(max_length=200, null=True, blank=True)
     recipient = models.ForeignKey(Seller, null=False, on_delete=CASCADE)
     payer = models.ForeignKey(Buyer, on_delete=SET_NULL, null=True)
+    phone_number = models.CharField(max_length=15,default='254745987667', null=False)
+    merchant_request_id = models.CharField(max_length=200, null=True, blank=True)
+    checkout_request_id = models.CharField(max_length=200, null=True, blank=True)
+    payment_status = models.CharField(max_length=50, default="Pending")
 
 class Order(models.Model):
     """Creats an instance of an order entity"""
