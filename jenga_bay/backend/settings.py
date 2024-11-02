@@ -84,7 +84,7 @@ ROOT_URLCONF = 'backend.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-         'DIRS': [os.path.join(BASE_DIR, 'C:/Users/Gimase/Desktop/JengaBay_frontend/build')],
+         'DIRS': [os.path.join(BASE_DIR, 'C:/Users/Gimase/Desktop/Repos/JengaBay/JengaBay_frontend/build')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -149,7 +149,7 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [
-  os.path.join(BASE_DIR, 'C:/Users/Gimase/Desktop/JengaBay_frontend/build')
+  os.path.join(BASE_DIR, 'C:/Users/Gimase/Desktop/Repos/JengaBay/JengaBay_frontend/build')
 ]
 
 # Default primary key field type
